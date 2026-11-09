@@ -19,6 +19,7 @@ and the planner finds places worth seeing along the way. You plan the trip by ta
 
 ## Open questions
 
-- How we get Hipcamp data. Hipcamp doesn't seem to have a public API, and scraping would likely break its
-  terms. The first issue is to find out what it does allow.
+- How we get Hipcamp data. Answered in [docs/hipcamp-data.md](docs/hipcamp-data.md): there's no API and
+  scraping breaks the terms, so the planner links to Hipcamp for each night and uses OpenStreetMap for
+  open campsite and road data.
 - Where the places to see come from.
