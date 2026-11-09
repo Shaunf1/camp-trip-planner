@@ -141,7 +141,7 @@ function StopCard(props: {
       </div>
       <p className="muted tiny">Check the road in on each Hipcamp listing: it should say “2WD accessible”.</p>
 
-      <details open={selected}>
+      <details open>
         <summary>Things to see near {s.name.split(',')[0]}</summary>
         <PoiList pois={sights} plan={plan} days={stopDays} onOps={onOps} onFocus={onFocus} origin={s} limit={10} />
         {camps && camps.length > 0 && (
@@ -215,13 +215,13 @@ function PoiList(props: {
                   aria-label={`Add ${p.name} to a day`}
                   value=""
                   onChange={(e) => {
-                    const [stopId, off] = e.target.value.split('|');
+                    const [stopId, off] = e.target.value.split(':');
                     onOps([{ type: 'add_activity', poi_id: p.id, stop_id: stopId, day_offset: Number(off) }]);
                   }}
                 >
                   <option value="">+ Add to day</option>
                   {options.map((d) => (
-                    <option key={`${d.stopId}|${d.dayOffset}`} value={`${d.stopId}|${d.dayOffset}`}>
+                    <option key={`${d.stopId}:${d.dayOffset}`} value={`${d.stopId}:${d.dayOffset}`}>
                       Day {dayNumber(plan, d.stopId!, d.dayOffset)} · {fmtDate(d.date)}
                     </option>
                   ))}

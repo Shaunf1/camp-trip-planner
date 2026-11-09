@@ -238,7 +238,8 @@ export default function App() {
             .filter((p) => plan.input.interests.includes(p.kind as any))
             .map((p) => ({ id: p.id, name: p.name, kind: p.kind, km: Math.round(distKm(origin, p)) }))
             .sort((a, b) => a.km - b.km)
-            .slice(0, 8)
+            // the nearest few of each kind, so a city's many lookouts don't crowd out its beaches
+            .filter((p, _i, all) => all.filter((q) => q.kind === p.kind).indexOf(p) < 4)
         : [];
     return {
       start: plan.start.name,

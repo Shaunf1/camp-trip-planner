@@ -70,7 +70,7 @@ export function PlanForm({ initial, busy, error, onSubmit }: Props) {
           <input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} name="startDate" />
         </label>
         <label>
-          Home by
+          Last day
           <input type="date" value={f.endDate} onChange={(e) => set('endDate', e.target.value)} name="endDate" />
         </label>
       </div>

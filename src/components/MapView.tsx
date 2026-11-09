@@ -61,8 +61,8 @@ export function MapView({ start, finish, roundTrip, stops, geometry, pois, focus
       })
         .bindTooltip(`${label === '⌂' ? 'Start' : 'Finish'}: ${p.name}`)
         .addTo(stopLayer);
-    flag(start, '⌂');
-    if (!roundTrip && !stops.some((s) => Math.abs(s.lat - finish.lat) < 1e-4 && Math.abs(s.lng - finish.lng) < 1e-4)) flag(finish, '⚑');
+    if (start.name) flag(start, '⌂');
+    if (finish.name && !roundTrip && !stops.some((s) => Math.abs(s.lat - finish.lat) < 1e-4 && Math.abs(s.lng - finish.lng) < 1e-4)) flag(finish, '⚑');
     stops.forEach((s, i) => {
       L.marker([s.lat, s.lng], {
         icon: L.divIcon({ className: 'pin pin-stop', html: `<span>${i + 1}</span>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
