@@ -7,8 +7,15 @@
 import type { Plugin } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import fs from 'node:fs';
+import net from 'node:net';
+import dns from 'node:dns';
 import path from 'node:path';
 import { claudePlanChange, claudeStatus } from './claude-cli';
+
+// Node gives each address only 250 ms to connect. On networks where IPv6 doesn't work and IPv4 takes ~1 s
+// (as here, to the OSM servers), every call failed with "fetch failed". Prefer IPv4 and allow more time.
+dns.setDefaultResultOrder('ipv4first');
+net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
 
 const USER_AGENT = 'camp-trip-planner/0.1 (prototype; +https://github.com/Shaunf1/camp-trip-planner)';
 
