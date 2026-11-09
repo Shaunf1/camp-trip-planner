@@ -48,8 +48,8 @@ conflicts with the scraping ban in the terms. Here's where we land:
 **Area for each night.** The planner picks a town or park, with its coordinates, for each night.
 
 **Hipcamp link.** Hipcamp has stable, public area pages at
-`https://www.hipcamp.com/en-AU/d/australia/<state>/<place>/camping/all` (an
-[example of the pattern](https://hipcamp.com/en-US/d/united-states/california/seaside/camping/all)),
+`https://www.hipcamp.com/en-AU/d/australia/<state>/<place>/camping/all` (for example
+<https://www.hipcamp.com/en-AU/d/australia/new-south-wales/sydney/camping/all>),
 plus park pages such as `/en-AU/discover/new-south-wales/<park-name>`. The planner links to the
 nearest area page, and you set the dates and filters on Hipcamp. Search-page URL parameters aren't
 documented, so don't build links that depend on them.
@@ -84,6 +84,25 @@ documented, so don't build links that depend on them.
 
 The planner should show 2WD access as **OK, check, or 4WD** with the reason, and never present it
 as a guarantee. Weather closures change all the time.
+
+### A 2WD or 4WD setting
+
+The trip settings should include a **vehicle** option: **2WD** (the default, because it matches
+our car) or **4WD**. What it changes:
+
+| | 2WD | 4WD |
+| --- | --- | --- |
+| OpenStreetMap campsites | Hide sites whose access road is rated 4WD. Show "check" sites with a warning. | Show all sites. Still label the 4WD roads so you know what you're in for. |
+| Route and places to see | Avoid `4wd_only` and grade 4 or 5 tracks. | Allow them. |
+| Hipcamp link | The same link. Remind you to check the listing's access notes for "4WD recommended". | The same link, with no reminder. |
+
+**Hipcamp can't filter by vehicle.** Hipcamp's sitemap of filter pages lists about 93,000 pages
+(checked 2026-11-09). Their filters cover things like RV, cabins, pets, showers, wheelchair access
+and big-rig-friendly, but **none covers 2WD, 4WD or off-road**. So a Hipcamp link can't carry the
+vehicle choice. Access details appear only in the host's text on each listing, such as "2WD Access:
+No 4WD? No worries!" or "Four-wheel-drive is recommended". We checked only these public filter
+pages. The search page might have a vehicle filter that doesn't appear in the sitemap; open
+<https://www.hipcamp.com/en-AU/search> in a browser and check its Filters panel to confirm.
 
 ## Open questions
 
