@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api';
 import { applyOperations, buildDays, computeRoute, distKm, fmtDuration, fmtKm, generatePlan, arrivalDate, routePoints, type RouteInfo } from './planner';
-import type { ChatMessage, Plan, PlanOperation, Poi, TripInput } from './types';
+import type { ChatMessage, HipcampSpot, Plan, PlanOperation, Poi, TripInput } from './types';
 import { PlanForm } from './components/PlanForm';
 import { MapView } from './components/MapView';
 import { StopsPanel, dayNumber } from './components/StopsPanel';
 import { ChatPanel } from './components/ChatPanel';
 import { TripSummary } from './components/TripSummary';
+import type { SpotResult } from './components/HipcampSpots';
 
 type Step = 'plan' | 'route' | 'trip';
 type PoiResult = Poi[] | 'loading' | { error: string };
@@ -24,6 +25,8 @@ const DEFAULT_INPUT: TripInput = {
 };
 const STOP_RADIUS_M = 15000;
 const ROUTE_RADIUS_M = 3000;
+const HIPCAMP_RADIUS_KM = 40;
+const spotKey = (s: { lat: number; lng: number; name: string }) => `hc:${s.lat.toFixed(3)},${s.lng.toFixed(3)}|${s.name}`;
 
 function loadSaved(): { plan: Plan | null; messages: ChatMessage[]; step: Step; input: TripInput } {
   try {
@@ -152,6 +155,39 @@ export default function App() {
   }, [plan?.stops, poiResults, kinds.join(',')]);
   const routePois: PoiResult | null = lineKey ? poiResults[lineKey] ?? 'loading' : null;
 
+  // ----- Hipcamp listings near each stop (read from Hipcamp's public location pages by the dev server) -----
+  const [spotResults, setSpotResults] = useState<Record<string, SpotResult>>({});
+  const [hipcampWarnings, setHipcampWarnings] = useState<string[]>([]);
+  const spotKeys = plan ? plan.stops.map(spotKey) : [];
+  useEffect(() => {
+    if (!plan) return;
+    const todo = plan.stops.filter((s) => !spotResults[spotKey(s)] && !inflight.current.has(spotKey(s)));
+    if (!todo.length) return;
+    todo.forEach((s) => inflight.current.add(spotKey(s)));
+    setSpotResults((r) => ({ ...r, ...Object.fromEntries(todo.map((s) => [spotKey(s), 'loading' as const])) }));
+    api
+      .hipcampNear(todo.map((s) => ({ lat: s.lat, lng: s.lng, name: s.name })), HIPCAMP_RADIUS_KM)
+      .then((res) => {
+        setHipcampWarnings(res.warnings);
+        setSpotResults((r) => ({ ...r, ...Object.fromEntries(todo.map((s, i) => [spotKey(s), res.results[i] ?? []])) }));
+      })
+      .catch((e) => setSpotResults((r) => ({ ...r, ...Object.fromEntries(todo.map((s) => [spotKey(s), { error: e.message }])) })))
+      .finally(() => todo.forEach((s) => inflight.current.delete(spotKey(s))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotKeys.join('#')]);
+  const stopSpots = useMemo(() => {
+    const out: Record<string, SpotResult> = {};
+    plan?.stops.forEach((s) => (out[s.id] = spotResults[spotKey(s)] ?? 'loading'));
+    return out;
+  }, [plan?.stops, spotResults]);
+  const allSpots = useMemo(() => {
+    const m = new Map<string, HipcampSpot>();
+    Object.values(stopSpots).forEach((r) => Array.isArray(r) && r.forEach((x) => m.set(x.id, x)));
+    return [...m.values()];
+  }, [stopSpots]);
+  const retryHipcamp = () => setSpotResults((r) => Object.fromEntries(Object.entries(r).filter(([, v]) => Array.isArray(v))));
+  const hipcampFailed = Object.values(stopSpots).some((v) => v !== 'loading' && !Array.isArray(v));
+
   const allPois = useMemo(() => {
     const m = new Map<string, Poi>();
     Object.values(stopPois).forEach((r) => Array.isArray(r) && r.forEach((p) => m.set(p.id, p)));
@@ -191,14 +227,14 @@ export default function App() {
       if (!plan) return [];
       setBusy('Updating the plan…');
       try {
-        const { plan: next, notes } = await applyOperations(plan, ops, allPois, setBusy);
+        const { plan: next, notes } = await applyOperations(plan, ops, allPois, setBusy, allSpots);
         setPlan(next);
         return notes;
       } finally {
         setBusy(null);
       }
     },
-    [plan, allPois],
+    [plan, allPois, allSpots],
   );
 
   const describeOp = useCallback(
@@ -225,9 +261,13 @@ export default function App() {
           return `Added ${allPois.find((p) => p.id === op.poi_id)?.name ?? 'a place'} to a day`;
         case 'remove_activity':
           return `Removed a place from a day`;
+        case 'set_campsite':
+          return `${name(op.stop_id)}: staying at ${allSpots.find((x) => x.id === op.hipcamp_id)?.name ?? 'a Hipcamp listing'}`;
+        case 'clear_campsite':
+          return `${name(op.stop_id)}: campsite cleared`;
       }
     },
-    [plan, allPois],
+    [plan, allPois, allSpots],
   );
 
   const planContext = () => {
@@ -265,6 +305,28 @@ export default function App() {
       along_route: Array.isArray(routePois)
         ? routePois.filter((p) => plan.input.interests.includes(p.kind as any)).slice(0, 15).map((p) => ({ id: p.id, name: p.name, kind: p.kind }))
         : [],
+      hipcamp_nearby: Object.fromEntries(
+        plan.stops.map((s) => {
+          const r = stopSpots[s.id];
+          if (!Array.isArray(r)) return [s.id, r === 'loading' ? 'still loading' : 'unavailable'];
+          return [
+            s.id,
+            r
+              .filter((x) => x.accommodations.includes('tent'))
+              .sort((a, b) => (b.recommendsPct ?? 0) - (a.recommendsPct ?? 0) || b.recommendsCount - a.recommendsCount)
+              .slice(0, 8)
+              .map((x) => ({
+                id: x.id,
+                name: x.name,
+                km: x.km,
+                recommends: x.recommendsPct === null ? 'too few reviews' : `${x.recommendsPct}% of ${x.recommendsCount}`,
+                price_from: x.price,
+                amenities: x.features.map((f) => f.name),
+              })),
+          ];
+        }),
+      ),
+      campsites_chosen: Object.fromEntries(plan.stops.filter((s) => s.camp).map((s) => [s.id, s.camp!.name])),
       activities: plan.activities.map((a) => ({ poi_id: a.poi.id, name: a.poi.name, stop_id: a.stopId, day_offset: a.dayOffset, day: dayNumber(plan, a.stopId, a.dayOffset) })),
     };
   };
@@ -327,6 +389,15 @@ export default function App() {
               </button>
             </>
           )}
+          {!busy && hipcampFailed && (
+            <>
+              {' '}
+              ⚠ Couldn't read Hipcamp.{' '}
+              <button className="small" onClick={retryHipcamp}>
+                Try again
+              </button>
+            </>
+          )}
         </div>
         {plan && (
           <button className="ghost small" onClick={reset}>
@@ -364,6 +435,8 @@ export default function App() {
               days={days}
               legs={routeInfo && routeInfo.legs.length === routePoints(plan).length - 1 ? routeInfo.legs : null}
               stopPois={stopPois}
+              stopSpots={stopSpots}
+              hipcampWarnings={hipcampWarnings}
               routePois={routePois}
               selectedStopId={selectedStopId}
               onSelectStop={setSelectedStopId}
@@ -381,6 +454,7 @@ export default function App() {
             stops={plan.stops}
             geometry={routeInfo?.geometry ?? null}
             pois={mapPois}
+            spots={selectedStopId && Array.isArray(stopSpots[selectedStopId]) ? (stopSpots[selectedStopId] as HipcampSpot[]) : []}
             focus={focus}
             onSelectStop={setSelectedStopId}
           />

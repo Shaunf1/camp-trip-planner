@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { Place, Poi, Stop } from '../types';
+import type { HipcampSpot, Place, Poi, Stop } from '../types';
 import { INTERESTS } from '../types';
 
 interface Props {
@@ -11,16 +11,18 @@ interface Props {
   stops: Stop[];
   geometry: [number, number][] | null;
   pois: Poi[];
+  /** Hipcamp listings to show (the selected stop's) */
+  spots?: HipcampSpot[];
   focus: { lat: number; lng: number; zoom?: number } | null;
   onSelectStop: (id: string) => void;
 }
 
 const emojiFor = (kind: string) => (kind === 'camp' ? '⛺' : INTERESTS.find((i) => i.id === kind)?.emoji ?? '📍');
 
-export function MapView({ start, finish, roundTrip, stops, geometry, pois, focus, onSelectStop }: Props) {
+export function MapView({ start, finish, roundTrip, stops, geometry, pois, spots = [], focus, onSelectStop }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
-  const layers = useRef<{ route?: L.LayerGroup; stops?: L.LayerGroup; pois?: L.LayerGroup }>({});
+  const layers = useRef<{ route?: L.LayerGroup; stops?: L.LayerGroup; pois?: L.LayerGroup; spots?: L.LayerGroup }>({});
   const fittedFor = useRef('');
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export function MapView({ start, finish, roundTrip, stops, geometry, pois, focus
     }).addTo(m);
     layers.current.route = L.layerGroup().addTo(m);
     layers.current.pois = L.layerGroup().addTo(m);
+    layers.current.spots = L.layerGroup().addTo(m);
     layers.current.stops = L.layerGroup().addTo(m);
     map.current = m;
     const ro = new ResizeObserver(() => m.invalidateSize());
@@ -94,6 +97,29 @@ export function MapView({ start, finish, roundTrip, stops, geometry, pois, focus
         .addTo(layer);
     });
   }, [pois]);
+
+  // Hipcamp listings near the selected stop
+  useEffect(() => {
+    const layer = layers.current.spots;
+    if (!layer) return;
+    layer.clearLayers();
+    const chosen = new Set(stops.map((s) => s.camp?.id).filter(Boolean));
+    spots.forEach((x) => {
+      const pct = x.recommendsPct === null ? 'new' : `${x.recommendsPct}%`;
+      L.marker([x.lat, x.lng], {
+        icon: L.divIcon({
+          className: `pin pin-hipcamp ${chosen.has(x.id) ? 'chosen' : ''}`,
+          html: `<span>${pct}</span>`,
+          iconSize: [40, 20],
+          iconAnchor: [20, 10],
+        }),
+        title: x.name,
+        zIndexOffset: chosen.has(x.id) ? 400 : 100,
+      })
+        .bindTooltip(`⛺ ${x.name} · ${pct} recommend · ${x.price ?? ''}`)
+        .addTo(layer);
+    });
+  }, [spots, stops]);
 
   useEffect(() => {
     if (focus && map.current) map.current.flyTo([focus.lat, focus.lng], focus.zoom ?? 11, { duration: 0.6 });

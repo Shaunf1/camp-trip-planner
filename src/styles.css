@@ -137,3 +137,22 @@ ol.days { list-style: none; padding: 0; margin: 0; display: flex; flex-direction
   .summary { overflow: visible; }
   .day { break-inside: avoid; }
 }
+
+/* ---------- Hipcamp spots ---------- */
+.filters { padding: 10px 14px; }
+.filters h3 { margin: 0 0 6px; font-size: 0.95rem; }
+.filter-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; font-size: 0.85rem; }
+.filter-row label { display: flex; align-items: center; gap: 4px; margin: 0; }
+.chip.small { font-size: 0.78rem; padding: 3px 8px; }
+.chosen-camp { margin: 6px 14px 0; padding: 6px 10px; background: #e6f1ea; border-radius: 8px; font-size: 0.9rem; }
+.hipcamp-spots { margin: 6px 14px 0; }
+.hipcamp-spots summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+.spots { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-direction: column; gap: 8px; }
+.spots li { display: flex; gap: 10px; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.spots li.chosen { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.spots img, .spots .no-photo { width: 84px; height: 60px; object-fit: cover; border-radius: 6px; flex: none; background: var(--chip); display: grid; place-items: center; }
+.spot-name { font-weight: 600; }
+.features { display: flex; flex-wrap: wrap; gap: 4px; font-size: 0.9rem; margin: 2px 0; }
+.spot-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pin-hipcamp span { display: block; background: #fff; border: 1.5px solid #b4531a; color: #7a3610; border-radius: 10px; font: 600 11px/16px system-ui, sans-serif; padding: 0 5px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.pin-hipcamp.chosen span { background: var(--accent); border-color: var(--accent); color: #fff; }

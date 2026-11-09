@@ -19,8 +19,9 @@ and the planner finds places worth seeing along the way. You plan the trip by ta
 
 ## Open questions
 
-- How we get Hipcamp data. Hipcamp doesn't seem to have a public API, and scraping would likely break its
-  terms. The first issue is to find out what it does allow.
+- How we get Hipcamp data. Hipcamp doesn't have a public API. The prototype reads its public location pages
+  (see "Running the prototype" below); that's fine for personal use, but not for a product, since scraping
+  likely breaks Hipcamp's terms.
 - Where the places to see come from.
 
 ## Running the prototype
@@ -60,9 +61,28 @@ The public Overpass server can be slow or busy. When it is, the top bar says so 
 
 ### Hipcamp
 
-Each stop links to a Hipcamp search for that area and those dates, filtered to tent sites that are 2WD accessible
-and park-at-site (`access=two-wheel-drive&access=drive-in`), using the link format from PR #3. The planner never
-fetches Hipcamp pages. Check the road access on each listing before booking.
+Each stop lists real Hipcamp listings within 40 km: photo, link, % of reviewers who recommend it, number of
+reviews, price and amenities. You can filter them (rating, toilets, showers, campfires, pets, water, power, tent
+sites only) and sort them (best rated, closest, cheapest). **Stay here** saves a listing as that stop's campsite,
+and it then shows in the day-by-day trip and the Markdown download. You can also ask the chat, for example
+"at Coffs pick the best rated tent spot with showers".
+
+This is a personal project, so the dev server reads Hipcamp's public web pages (`server/hipcamp.ts`). It stays
+polite:
+
+- It only reads the "top spots" location pages for states, regions and towns
+  (e.g. `/en-AU/d/australia/new-south-wales/coffs-harbour/camping/all`), which Hipcamp's `robots.txt` allows.
+  It never calls `/api` or `/graphql`, which `robots.txt` asks bots to leave alone.
+- One request at a time, 3 seconds apart, with our User-Agent, and at most 30 new pages per request.
+- Each page is cached on disk for a week, so the first look at an area takes up to a minute and later ones
+  are instant.
+
+Coverage is what those pages show: about 20 to 30 top listings per town or region, so it's not every listing.
+Each stop also keeps a link to the full Hipcamp search for those dates, filtered to tent sites that are 2WD
+accessible and park-at-site. The location pages don't say whether the road in is 2WD, so check that on each
+listing before booking.
+
+Orca's built-in browser doesn't open links in new tabs, so every Hipcamp link has a **Copy link** button.
 
 ### 2WD and the big tent
 

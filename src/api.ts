@@ -1,4 +1,4 @@
-import type { Place, Poi, PlanOperation } from './types';
+import type { HipcampSpot, Place, Poi, PlanOperation } from './types';
 
 async function req<T>(url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, body === undefined ? undefined : {
@@ -31,3 +31,6 @@ export const poisAlong = (coords: [number, number][], radiusM: number, kinds: st
 export const chatStatus = () => req<{ configured: boolean; model: string }>('/api/chat/status');
 export const chat = (messages: { role: string; content: string }[], plan: unknown) =>
   req<{ reply: string; operations: PlanOperation[] }>('/api/chat', { messages, plan });
+
+export const hipcampNear = (stops: { lat: number; lng: number; name: string }[], radiusKm: number) =>
+  req<{ results: HipcampSpot[][]; warnings: string[] }>('/api/hipcamp', { stops, radiusKm });

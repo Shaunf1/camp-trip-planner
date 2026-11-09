@@ -1,5 +1,5 @@
 import * as api from './api';
-import type { Activity, Day, Leg, Place, Plan, PlanOperation, Poi, Stop, TripInput } from './types';
+import type { Activity, Day, HipcampSpot, Leg, Place, Plan, PlanOperation, Poi, Stop, TripInput } from './types';
 
 // ---------- dates ----------
 export function addDays(date: string, n: number): string {
@@ -217,6 +217,7 @@ export async function applyOperations(
   ops: PlanOperation[],
   allPois: Poi[],
   onStatus: (s: string) => void,
+  spots: HipcampSpot[] = [],
 ): Promise<{ plan: Plan; notes: string[] }> {
   let p: Plan = structuredClone(plan);
   const notes: string[] = [];
@@ -250,7 +251,7 @@ export async function applyOperations(
           if (!s) throw new Error(`no stop ${op.stop_id}`);
           onStatus(`Finding ${op.place}…`);
           const place = await api.geocode(op.place);
-          Object.assign(s, { name: place.name, lat: place.lat, lng: place.lng, anchor: true });
+          Object.assign(s, { name: place.name, lat: place.lat, lng: place.lng, anchor: true, camp: undefined });
           p.activities = p.activities.filter((a) => a.stopId !== s.id);
           break;
         }
@@ -298,6 +299,18 @@ export async function applyOperations(
         case 'remove_activity':
           p.activities = p.activities.filter((a) => a.poi.id !== op.poi_id);
           break;
+        case 'set_campsite': {
+          const s = findStop(op.stop_id);
+          const spot = spots.find((x) => x.id === op.hipcamp_id);
+          if (!s || !spot) throw new Error(`unknown stop or Hipcamp listing`);
+          s.camp = { id: spot.id, name: spot.name, url: spot.url, price: spot.price, recommendsPct: spot.recommendsPct };
+          break;
+        }
+        case 'clear_campsite': {
+          const s = findStop(op.stop_id);
+          if (s) delete s.camp;
+          break;
+        }
         default:
           throw new Error(`unknown operation ${(op as any).type}`);
       }

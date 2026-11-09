@@ -3,12 +3,24 @@ import type { Day, Leg, Plan, PlanOperation, Poi, Stop } from '../types';
 import { INTERESTS } from '../types';
 import { addDays, arrivalDate, distKm, fmtDate, fmtDuration, fmtKm } from '../planner';
 import { hipcampSearchUrl } from '../hipcamp';
+import { CopyLink, DEFAULT_FILTERS, FilterBar, SpotList, type SpotFilters, type SpotResult } from './HipcampSpots';
+
+const FILTER_KEY = 'camp-trip-planner:hipcamp-filters';
+function loadFilters(): SpotFilters {
+  try {
+    return { ...DEFAULT_FILTERS, ...JSON.parse(localStorage.getItem(FILTER_KEY) || '{}') };
+  } catch {
+    return DEFAULT_FILTERS;
+  }
+}
 
 interface Props {
   plan: Plan;
   days: Day[];
   legs: Leg[] | null;
   stopPois: Record<string, Poi[] | 'loading' | { error: string }>;
+  stopSpots: Record<string, SpotResult>;
+  hipcampWarnings: string[];
   routePois: Poi[] | 'loading' | { error: string } | null;
   selectedStopId: string | null;
   onSelectStop: (id: string) => void;
@@ -18,7 +30,16 @@ interface Props {
 
 const kindLabel = (k: string) => (k === 'camp' ? '⛺ Campsite' : INTERESTS.find((i) => i.id === k)?.emoji + ' ' + INTERESTS.find((i) => i.id === k)?.label);
 
-export function StopsPanel({ plan, days, legs, stopPois, routePois, selectedStopId, onSelectStop, onOps, onFocus }: Props) {
+export function StopsPanel({ plan, days, legs, stopPois, stopSpots, hipcampWarnings, routePois, selectedStopId, onSelectStop, onOps, onFocus }: Props) {
+  const [filters, setFiltersState] = useState<SpotFilters>(loadFilters);
+  const setFilters = (f: SpotFilters) => {
+    setFiltersState(f);
+    try {
+      localStorage.setItem(FILTER_KEY, JSON.stringify(f));
+    } catch {
+      /* ignore */
+    }
+  };
   const limitS = plan.input.maxDriveHours * 3600;
   const homeLeg = plan.input.roundTrip ? legs?.[plan.stops.length] : undefined;
   return (
@@ -32,6 +53,13 @@ export function StopsPanel({ plan, days, legs, stopPois, routePois, selectedStop
         </div>
       </div>
 
+      <FilterBar filters={filters} onChange={setFilters} />
+      {hipcampWarnings.map((w) => (
+        <p key={w} className="muted tiny">
+          {w}
+        </p>
+      ))}
+
       {plan.stops.map((s, i) => (
         <StopCard
           key={s.id}
@@ -41,6 +69,8 @@ export function StopsPanel({ plan, days, legs, stopPois, routePois, selectedStop
           leg={legs?.[i]}
           limitS={limitS}
           pois={stopPois[s.id]}
+          spots={stopSpots[s.id]}
+          filters={filters}
           selected={selectedStopId === s.id}
           onSelect={() => {
             onSelectStop(s.id);
@@ -74,12 +104,14 @@ function StopCard(props: {
   leg?: Leg;
   limitS: number;
   pois: Poi[] | 'loading' | { error: string } | undefined;
+  spots: SpotResult | undefined;
+  filters: SpotFilters;
   selected: boolean;
   onSelect: () => void;
   onOps: (ops: PlanOperation[]) => void;
   onFocus: (p: { lat: number; lng: number; zoom?: number }) => void;
 }) {
-  const { stop: s, index, plan, leg, limitS, pois, selected, onSelect, onOps, onFocus } = props;
+  const { stop: s, index, plan, leg, limitS, pois, spots, filters, selected, onSelect, onOps, onFocus } = props;
   const arrive = arrivalDate(plan, s.id);
   const depart = addDays(arrive, s.nights);
   const camps = Array.isArray(pois) ? pois.filter((p) => p.kind === 'camp') : null;
@@ -120,6 +152,22 @@ function StopCard(props: {
         </div>
       </header>
 
+      {s.camp && (
+        <div className="chosen-camp">
+          ⛺ Staying at{' '}
+          <a href={s.camp.url} target="_blank" rel="noreferrer">
+            <strong>{s.camp.name}</strong>
+          </a>
+          {s.camp.recommendsPct !== null && <span className="muted small"> · 👍 {s.camp.recommendsPct}%</span>}
+          {s.camp.price && <span className="muted small"> · from {s.camp.price}</span>} <CopyLink url={s.camp.url} />
+        </div>
+      )}
+
+      <details open className="hipcamp-spots">
+        <summary>Hipcamp spots near {s.name.split(',')[0]}</summary>
+        <SpotList stop={s} result={spots} filters={filters} onOps={onOps} onFocus={onFocus} />
+      </details>
+
       <div className="camp-row">
         <a
           className="hipcamp"
@@ -127,8 +175,9 @@ function StopCard(props: {
           target="_blank"
           rel="noreferrer"
         >
-          ⛺ Find 2WD drive-in tent sites on Hipcamp
+          ⛺ Search all of Hipcamp for these dates
         </a>
+        <CopyLink url={hipcampSearchUrl({ name: s.name.split(',')[0], lat: s.lat, lng: s.lng, arrive, depart })} />
         <span className="muted small">
           {camps === null
             ? pois && pois !== 'loading'

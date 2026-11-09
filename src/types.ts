@@ -31,6 +31,36 @@ export interface Stop extends Place {
   nights: number;
   /** true when the stop is one of the trip's named places, false when the planner placed it on the route */
   anchor: boolean;
+  /** the Hipcamp listing picked for these nights, if any */
+  camp?: ChosenCamp;
+}
+
+export interface ChosenCamp {
+  id: string;
+  name: string;
+  url: string;
+  price: string | null;
+  recommendsPct: number | null;
+}
+
+/** A Hipcamp listing read from Hipcamp's public location pages (see server/hipcamp.ts). */
+export interface HipcampSpot {
+  id: string;
+  name: string;
+  url: string;
+  lat: number;
+  lng: number;
+  recommendsPct: number | null;
+  recommendsCount: number;
+  price: string | null;
+  priceAud: number | null;
+  town: string;
+  accommodations: string[];
+  features: { slug: string; name: string }[];
+  photo: string | null;
+  summary: string;
+  sites: number | null;
+  km?: number;
 }
 
 export interface Leg {
@@ -82,7 +112,9 @@ export type PlanOperation =
   | { type: 'set_start_date'; date: string }
   | { type: 'set_interests'; interests: Interest[] }
   | { type: 'add_activity'; poi_id: string; stop_id: string; day_offset: number }
-  | { type: 'remove_activity'; poi_id: string };
+  | { type: 'remove_activity'; poi_id: string }
+  | { type: 'set_campsite'; stop_id: string; hipcamp_id: string }
+  | { type: 'clear_campsite'; stop_id: string };
 
 export interface ChatMessage {
   role: 'user' | 'assistant';

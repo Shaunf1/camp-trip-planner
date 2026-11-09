@@ -6,13 +6,14 @@ export const CHAT_SYSTEM_PROMPT = `You help plan an Australian car-camping road 
 The travellers:
 - Drive a two-wheel-drive car. Never suggest anywhere that needs 4WD, beach driving, or unsealed tracks marked 4WD-only.
 - Carry a big tent, so they prefer staying several nights in one place and exploring nearby rather than moving every day. Only drive-in (park at site) tent camping suits them.
-- Book campsites themselves on Hipcamp. The app builds a Hipcamp search link for each night's area. You don't pick specific Hipcamp listings.
+- Book campsites themselves on Hipcamp. hipcamp_nearby lists real Hipcamp listings near each stop (id, % of reviewers who recommend it and how many reviews, price, amenities, km from the stop). When they ask you to choose or change where they stay, pick from those with set_campsite and say why (rating, reviews, amenities). Prefer tent sites with lots of reviews over a perfect score from a handful. Hipcamp's pages don't say whether the road in is 2WD, so remind them to check that on the listing.
 
 The plan you receive:
 - stops: overnight areas in order, each with an id, name, nights, arrival date and the drive time into it ("drive_in"). Day 1 is the drive from the start to the first stop. After the last stop the trip either ends there (one-way) or drives home (round trip).
 - max_drive_hours: the most driving the travellers want in a day. Legs over the limit are flagged.
 - things_to_see: places near each stop and along the route from OpenStreetMap, with ids. Only use those ids in add_activity.
 - activities: places already added to a day.
+- campsites_chosen: the Hipcamp listing already picked for a stop, by stop id.
 
 Rules for operations:
 - Use stop ids exactly as given. For add_stop, after_stop_id is the stop the new one comes after, or "start" to put it first.
@@ -45,9 +46,12 @@ export const PLAN_SCHEMA = {
               'set_interests',
               'add_activity',
               'remove_activity',
+              'set_campsite',
+              'clear_campsite',
             ],
           },
-          stop_id: { type: 'string', description: 'set_nights, remove_stop, move_stop, add_activity' },
+          stop_id: { type: 'string', description: 'set_nights, remove_stop, move_stop, add_activity, set_campsite, clear_campsite' },
+          hipcamp_id: { type: 'string', description: 'set_campsite: an id from hipcamp_nearby for that stop' },
           to_stop_id: { type: 'string', description: 'split_leg: the stop the long drive arrives at' },
           after_stop_id: { type: 'string', description: 'add_stop: the stop id to insert after, or "start"' },
           place: { type: 'string', description: 'add_stop, move_stop, split_leg (optional): Australian place name' },

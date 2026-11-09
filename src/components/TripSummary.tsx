@@ -24,7 +24,11 @@ export function tripMarkdown(plan: Plan, days: Day[]): string {
     for (const a of d.activities) lines.push(`- ${emoji(a.poi.kind)} ${a.poi.name} (https://www.openstreetmap.org/${a.poi.id})`);
     if (d.stopId && d.dayOffset === 0) {
       const s = plan.stops.find((x) => x.id === d.stopId)!;
-      lines.push(`- Camp: ${s.name}, ${s.nights} night${s.nights > 1 ? 's' : ''}. Hipcamp (2WD, drive-in tent sites): ${campLink(plan, s.id)}`);
+      lines.push(
+        s.camp
+          ? `- Camp: ${s.camp.name}${s.camp.recommendsPct !== null ? ` (${s.camp.recommendsPct}% recommend)` : ''}, ${s.nights} night${s.nights > 1 ? 's' : ''}: ${s.camp.url}`
+          : `- Camp: ${s.name}, ${s.nights} night${s.nights > 1 ? 's' : ''}. Hipcamp (2WD, drive-in tent sites): ${campLink(plan, s.id)}`,
+      );
     }
     lines.push('');
   }
@@ -92,8 +96,19 @@ export function TripSummary({ plan, days }: { plan: Plan; days: Day[] }) {
                 {!d.leg && d.activities.length === 0 && d.stopId && <p className="muted">Free day. Add things to see from the route view.</p>}
                 {stop && (
                   <p className="camp">
-                    ⛺ Night {d.dayOffset + 1} of {stop.nights} at {stop.name}
-                    {d.dayOffset === 0 && (
+                    ⛺ Night {d.dayOffset + 1} of {stop.nights} at{' '}
+                    {stop.camp ? (
+                      <>
+                        <a href={stop.camp.url} target="_blank" rel="noreferrer">
+                          <strong>{stop.camp.name}</strong>
+                        </a>
+                        {stop.camp.recommendsPct !== null && <span className="muted"> · 👍 {stop.camp.recommendsPct}%</span>}
+                        <span className="muted"> ({stop.name})</span>
+                      </>
+                    ) : (
+                      stop.name
+                    )}
+                    {d.dayOffset === 0 && !stop.camp && (
                       <>
                         {' · '}
                         <a href={campLink(plan, stop.id)} target="_blank" rel="noreferrer">

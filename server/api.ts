@@ -11,6 +11,7 @@ import net from 'node:net';
 import dns from 'node:dns';
 import path from 'node:path';
 import { claudePlanChange, claudeStatus } from './claude-cli';
+import { distanceKm, parseDiscoverPage, photoUrl, regionName, stateSlug, type HipcampSpot } from './hipcamp';
 
 // Node gives each address only 250 ms to connect. On networks where IPv6 doesn't work and IPv4 takes ~1 s
 // (as here, to the OSM servers), every call failed with "fetch failed". Prefer IPv4 and allow more time.
@@ -157,6 +158,106 @@ function abbrState(s: string) {
     'Australian Capital Territory': 'ACT',
   };
   return m[s] || s;
+}
+
+// ---------- Hipcamp (public location pages only; see hipcamp.ts) ----------
+const hipcampQueue = makeQueue(3000);
+
+async function stateOf(lat: number, lng: number): Promise<string | null> {
+  return cached(`state:${lat.toFixed(1)},${lng.toFixed(1)}`, () =>
+    nominatimQueue(async () => {
+      const r = (await fetchJson(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=5&addressdetails=1&lat=${lat}&lon=${lng}`,
+      )) as any;
+      return r.address?.state ?? null;
+    }),
+  );
+}
+
+async function hipcampPage(pagePath: string, slug: string) {
+  return cached(`hipcamp:${pagePath}`, () =>
+    hipcampQueue(async () => {
+      const doFetch = () =>
+        fetch(BASE_HIPCAMP + pagePath, {
+          headers: { 'User-Agent': USER_AGENT, Accept: 'text/html', 'Accept-Language': 'en-AU' },
+          signal: AbortSignal.timeout(30000),
+        });
+      let res: Response;
+      try {
+        res = await doFetch();
+      } catch {
+        await new Promise((r) => setTimeout(r, 2000));
+        res = await doFetch();
+      }
+      // Hipcamp redirects places it has no page for to the all-Australia page; remember that as "no page"
+      if (res.status === 404 || (res.ok && new URL(res.url).pathname !== pagePath)) return { spots: [], regionPaths: [], missing: true };
+      if (!res.ok) throw new HttpError(502, `Hipcamp said ${res.status} for ${pagePath}`);
+      const parsed = parseDiscoverPage(await res.text(), slug);
+      // an empty page is probably a bot check, not a real answer, so don't cache it
+      if (!parsed.spots.length) throw new HttpError(502, `Hipcamp page had no listings: ${pagePath}`);
+      return { ...parsed, missing: false };
+    }),
+  );
+}
+const BASE_HIPCAMP = 'https://www.hipcamp.com';
+const MAX_HIPCAMP_PAGES = 30; // per request, so a long trip can't turn into a crawl
+
+const townSlug = (name: string) =>
+  name.split(',')[0].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+async function hipcampNear(stops: { lat: number; lng: number; name?: string }[], radiusKm: number) {
+  const warnings: string[] = [];
+  const states = await Promise.all(stops.map((s) => stateOf(s.lat, s.lng).catch(() => null)));
+  const pool = new Map<string, HipcampSpot>();
+  let pages = 0;
+  const read = async (pagePath: string, slug: string, label: string) => {
+    const isCached = !!cache[`hipcamp:${pagePath}`];
+    if (!isCached && pages >= MAX_HIPCAMP_PAGES) return null;
+    if (!isCached) pages++;
+    try {
+      const p = await hipcampPage(pagePath, slug);
+      p.spots.forEach((s) => pool.set(s.id, s));
+      return p;
+    } catch (e: any) {
+      warnings.push(`Couldn't read Hipcamp's ${label} page (${e.message}).`);
+      return null;
+    }
+  };
+  for (const state of [...new Set(states.filter((s): s is string => !!s))]) {
+    const slug = stateSlug(state);
+    const mine = stops.filter((_, i) => states[i] === state);
+    const candidates = new Set<string>();
+    // 1. the state's top spots, and the region pages it links to
+    (await read(`/en-AU/d/australia/${slug}/camping/all`, slug, state))?.regionPaths.forEach((p) => candidates.add(p));
+    // 2. each stop's own town page, if Hipcamp has one; it links to the towns around it
+    for (const s of mine) {
+      if (!s.name) continue;
+      const own = `/en-AU/d/australia/${slug}/${townSlug(s.name)}/camping/all`;
+      candidates.delete(own);
+      (await read(own, slug, s.name.split(',')[0]))?.regionPaths.forEach((p) => candidates.add(p));
+    }
+    // 3. the other town/region pages whose centre is within reach of a stop, nearest first
+    const near: { path: string; km: number }[] = [];
+    const ownPages = new Set(mine.filter((s) => s.name).map((s) => `/en-AU/d/australia/${slug}/${townSlug(s.name!)}/camping/all`));
+    for (const rp of candidates) {
+      if (ownPages.has(rp)) continue;
+      const centre = await geocode(`${regionName(rp)}, ${state}`).catch(() => null);
+      const km = centre ? Math.min(...mine.map((s) => distanceKm(s, centre))) : Infinity;
+      if (km < radiusKm + 25) near.push({ path: rp, km });
+    }
+    near.sort((a, b) => a.km - b.km);
+    for (const n of near) await read(n.path, slug, regionName(n.path));
+  }
+  if (pages >= MAX_HIPCAMP_PAGES) warnings.push('Read the most Hipcamp pages allowed in one go; some areas may be missing.');
+  const points = stops.map((s) => [s.lat, s.lng] as [number, number]);
+  const all = [...pool.values()];
+  const results = points.map(([lat, lng]) =>
+    all
+      .map((s) => ({ ...s, photo: photoUrl(s.photo), km: Math.round(distanceKm({ lat, lng }, s) * 10) / 10 }))
+      .filter((s) => s.km <= radiusKm)
+      .sort((a, b) => a.km - b.km),
+  );
+  return { results, warnings };
 }
 
 // ---------- OSRM ----------
@@ -359,6 +460,11 @@ export function apiPlugin(): Plugin {
             case '/api/pois': {
               const b = await readBody(req);
               return send(res, 200, await pois(b));
+            }
+            case '/api/hipcamp': {
+              const b = await readBody(req);
+              if (!Array.isArray(b.stops) || !b.stops.length) return send(res, 400, { error: 'Missing stops' });
+              return send(res, 200, await hipcampNear(b.stops, Math.min(Number(b.radiusKm) || 40, 100)));
             }
             case '/api/chat/status':
               return send(res, 200, await claudeStatus());
