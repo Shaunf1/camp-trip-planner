@@ -17,11 +17,14 @@ and the planner finds places worth seeing along the way. You plan the trip by ta
 3. Find places to see near the route and near each campsite: lookouts, walks, swimming spots, towns.
 4. Let us change the plan by asking Claude, for example "one more night here" or "skip the long drive on day 2".
 
+## Hipcamp data
+
+The planner reads Hipcamp's public location pages to show real listings near each night's stop, with ratings,
+reviews, prices, amenities and photos. See [docs/hipcamp-data.md](docs/hipcamp-data.md) for how it works and
+what it covers.
+
 ## Open questions
 
-- How we get Hipcamp data. Hipcamp doesn't have a public API. The prototype reads its public location pages
-  (see "Running the prototype" below); that's fine for personal use, but not for a product, since scraping
-  likely breaks Hipcamp's terms.
 - Where the places to see come from.
 
 ## Running the prototype
@@ -67,8 +70,8 @@ sites only) and sort them (best rated, closest, cheapest). **Stay here** saves a
 and it then shows in the day-by-day trip and the Markdown download. You can also ask the chat, for example
 "at Coffs pick the best rated tent spot with showers".
 
-This is a personal project, so the dev server reads Hipcamp's public web pages (`server/hipcamp.ts`). It stays
-polite:
+The dev server reads Hipcamp's public web pages (`server/hipcamp.ts`; the details are in
+[docs/hipcamp-data.md](docs/hipcamp-data.md)). It stays polite:
 
 - It only reads the "top spots" location pages for states, regions and towns
   (e.g. `/en-AU/d/australia/new-south-wales/coffs-harbour/camping/all`), which Hipcamp's `robots.txt` allows.
